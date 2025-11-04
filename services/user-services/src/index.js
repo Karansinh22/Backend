@@ -34,7 +34,7 @@ const commonConfig = require("./config/common");
 const logApiCalls = require('./middleware/loggerMiddleware.js');
 const throttleCalls = require('./middleware/throttleMiddleware.js');
 const cron = require('node-cron');
-const { setupTerritoryRabbitMQ } = require('./libs/rabbitmq.js');
+// const { setupTerritoryRabbitMQ } = require('./libs/rabbitmq.js');
 
 var whitelist = [
     'dev-sample-services.shivalikgroup.com','35.154.180.15','35.154.180.15:3011', 'localhost:11001',
@@ -77,7 +77,7 @@ const v1Routes = require('./routes');
 app.use('/api/v1', v1Routes);
 
 // Start RabbitMQ consumer
-setupTerritoryRabbitMQ().catch(err => console.error('Failed to start Territory RabbitMQ:', err));
+// setupTerritoryRabbitMQ().catch(err => console.error('Failed to start Territory RabbitMQ:', err));
 
 app.get("/", (req, res) => {
     res.json({ message: `Welcome to FIRST application. Hello : ${envFile}` });
