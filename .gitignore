@@ -3,6 +3,7 @@ node_modules
 package-lock.json
 .DS_Store
 Archive
+deploy.sh
 
 services/user-services/node_modules
 services/user-services/.env.dev
