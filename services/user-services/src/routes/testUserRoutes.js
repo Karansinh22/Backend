@@ -4,7 +4,6 @@ const UserValidation = require("../validations/userValidation");
 const router = require('express').Router();
 const { isCommonUserAuthenticated, adminVerifyToken, superAdminVerifyToken } = require("../middleware/authJwt");
 
-// Need to Just Test
 router.post("/test-user-api", UserValidation.testUserApi, TestUserController.testUserApi);
 
 // router.put("/test-user-api/:userId", UserValidation.update, TestUserController.update);
