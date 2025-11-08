@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>
+		<%= process.env.APP_NAME %> | <%= WebsiteData.firstName %>
+	</title>
+	<style>
+		body {
+			margin: 0;
+			padding: 25px 35px;
+			font-family: Arial, sans-serif;
+			font-size: 15px;
+			color: #1E1E1B;
+			background-color: #ffffff;
+			line-height: 1.6;
+			text-align: left;
+		}
+
+		p {
+			margin: 0 0 15px 0;
+		}
+
+		strong {
+			font-weight: 600;
+		}
+
+		.footer {
+			border-top: 1px solid #e5e5e5;
+			margin-top: 30px;
+			padding-top: 15px;
+			font-size: 13px;
+			color: #777;
+		}
+
+		.footer-table {
+			width: 100%;
+			border-collapse: collapse;
+		}
+
+		.footer-left {
+			vertical-align: middle;
+			text-align: left;
+			white-space: nowrap;
+		}
+
+		.footer-right {
+			vertical-align: middle;
+			text-align: right;
+			white-space: nowrap;
+		}
+
+		img.store {
+			display: inline-block;
+			vertical-align: middle;
+			margin-left: 10px;
+			width: 15px !important;
+			height: 15px !important;
+			max-width: 15px !important;
+			max-height: 15px !important;
+			border: 0;
+		}
+
+		img.icon {
+			display: inline-block;
+			vertical-align: middle;
+			margin-left: 8px;
+			width: 16px !important;
+			height: 16px !important;
+			max-width: 16px !important;
+			max-height: 16px !important;
+			border: 0;
+		}
+
+	</style>
+</head>
+
+<body>
+	<p>Hello Admin,</p>
+
+	<p>
+		You have received a <strong>New Inquiry</strong> through the
+		<strong>Growth Partner</strong> website. Please review the details below:
+	</p>
+
+	<p>
+		<strong>
+			<%= WebsiteData.firstName %>
+				<%= WebsiteData.lastName %>
+		</strong>
+		is interested in a <strong>
+			<%= WebsiteData.propose %>
+		</strong>.
+	</p>
+
+	<p>Best Regards,<br><strong>Shivalik Group</strong></p>
+
+	<!-- Footer -->
+<div style="border-top:1px solid #e5e5e5;margin-top:30px;padding-top:15px;font-size:13px;color:#777;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
+    <tr>
+      <!-- Left Side -->
+      <td style="text-align:left;vertical-align:middle;white-space:nowrap;">
+        <p style="display:inline;font-family:Arial,sans-serif;font-size:13px;color:#777;margin:0;">Download Our App:</p>
+        <a href="https://play.google.com/store/apps/details?id=com.realEstateOS" target="_blank" style="text-decoration:none;margin-left:6px;">
+          <img src="https://pnghdpro.com/wp-content/themes/pnghdpro/download/social-media-and-brands/google-play-store-logo-icon.png" width="18" height="18" style="display:inline-block;border:0;vertical-align:middle;width:18px;height:18px;">
+        </a>
+        <a href="https://apps.apple.com/in/app/r-app/id6747890096" target="_blank" style="text-decoration:none;margin-left:5px;">
+          <img src="https://pnghdpro.com/wp-content/themes/pnghdpro/download/social-media-and-brands/apple-app-store-logo.png" width="18" height="18" style="display:inline-block;border:0;vertical-align:middle;width:18px;height:18px;">
+        </a>
+      </td>
+
+      <!-- Right Side -->
+      <td style="text-align:right;vertical-align:middle;white-space:nowrap;">
+        <a href="https://www.facebook.com/ShivalikGroup" target="_blank" style="text-decoration:none;">
+          <img src="https://cdn-icons-png.flaticon.com/512/733/733547.png" width="18" height="18" style="display:inline-block;border:0;margin-left:6px;vertical-align:middle;width:18px;height:18px;">
+        </a>
+        <a href="https://twitter.com/shivalik_group" target="_blank" style="text-decoration:none;">
+          <img src="https://cdn-icons-png.flaticon.com/512/733/733579.png" width="18" height="18" style="display:inline-block;border:0;margin-left:6px;vertical-align:middle;width:18px;height:18px;">
+        </a>
+        <a href="https://www.instagram.com/shivalikgroup/" target="_blank" style="text-decoration:none;">
+          <img src="https://cdn-icons-png.flaticon.com/512/2111/2111463.png" width="18" height="18" style="display:inline-block;border:0;margin-left:6px;vertical-align:middle;width:18px;height:18px;">
+        </a>
+        <a href="https://in.linkedin.com/company/shivalik-group" target="_blank" style="text-decoration:none;">
+          <img src="https://cdn-icons-png.flaticon.com/512/174/174857.png" width="18" height="18" style="display:inline-block;border:0;margin-left:6px;vertical-align:middle;width:18px;height:18px;">
+        </a>
+        <a href="https://www.youtube.com/channel/UCsy9wUC47HDWZuVxl-h6-Ug" target="_blank" style="text-decoration:none;">
+          <img src="https://cdn-icons-png.flaticon.com/512/1384/1384060.png" width="18" height="18" style="display:inline-block;border:0;margin-left:6px;vertical-align:middle;width:18px;height:18px;">
+        </a>
+      </td>
+    </tr>
+  </table>
+
+  <p style="font-family:Arial,sans-serif;text-align:center;font-size:13px;color:#777;margin-top:20px;margin-bottom:0;">
+    &copy; 2024 Shivalik Group
+  </p>
+</div>
+</body>
+
+</html>

@@ -11,7 +11,7 @@ This repository contains independent backend services that together form the **R
 | Service | Purpose | ERD Diagram |
 |---------|---------|-------------|
 | 🏢 Society Services | Manage societies, units, parking, members, committees | [View ERD](https://drive.google.com/file/d/1IOyGOjEag3ACskgRCEt4DkaVBs9Z4N8E/view?usp=drive_link) |
-| 👥 Community Services | Community creation, posts, join requests, member roles | [View ERD](https://drive.google.com/file/d/1tF80xlRmXHi6pr-CphjzfJg0YIChFew0/view?usp=drive_link) |
+| 👥 Community Services | Community creation, posts, join requests, member roles | [View ERD]( =drive_link) |
 | 🧠 Knowledge Services | Knowledge base, categories, versions, history | [View ERD](https://drive.google.com/file/d/16i-g6heyDIo6QnGTJardfxRcROG5WQBs/view?usp=drive_link) |
 | 📝 Notes Services | Personal & shared notes with tags, mentions, attachments | [View ERD](https://drive.google.com/file/d/1Tjc7pzeQ0VydUXRfg0m1X_FqryvgmGUr/view?usp=drive_link) |
 | 🏝️ Leave Management | Employee leave types, balances, requests, approvals | [View ERD](https://drive.google.com/file/d/1J-HBa-G4JFmojYYiA4BLXxNdEsmCMdSg/view?usp=drive_link) |
