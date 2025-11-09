@@ -33,6 +33,7 @@ router.post(
     communityController.createJoinRequest
 );
 
+router.delete('/communities/:communityId/leave', auth.verifyToken, communityController.leaveCommunity);
 router.get('/join-requests/user', auth.verifyToken, communityController.getUserJoinRequests);
 router.get('/communities/:communityId/membership', auth.verifyToken, communityController.checkCommunityMembership);
 

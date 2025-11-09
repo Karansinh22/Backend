@@ -8,6 +8,50 @@ const CommunityManagersModel = require('../models/CommunityManagers.js');
 const PulsesModel = require('../models/Pulses.js');
 const EventsModel = require('../models/Events.js');
 const ReportsModel = require('../models/Reports.js');
+const MarketplaceListingsModel = require('../models/MarketplaceListings.js');
+
+/**
+ * Get communities where user is a manager
+ */
+const getManagerCommunities = async (req, res) => {
+    try {
+        const userId = req.user._id;
+
+        // Get all communities where user is a manager
+        const managerAssignments = await CommunityManagersModel.find({
+            userId: userId,
+            status: 'Active',
+            isDeleted: false
+        }).populate('communityId', 'name description bannerImage location status');
+
+        // Also get communities created by user (they are automatically managers)
+        const createdCommunities = await CommunitiesModel.find({
+            createdBy: userId,
+            isDeleted: false
+        }).select('name description bannerImage location status');
+
+        // Combine and deduplicate
+        const managerCommunityIds = managerAssignments.map(m => m.communityId?._id?.toString()).filter(Boolean);
+        const createdCommunityIds = createdCommunities.map(c => c._id.toString());
+        const allCommunityIds = [...new Set([...managerCommunityIds, ...createdCommunityIds])];
+
+        // Get all unique communities
+        const allCommunities = await CommunitiesModel.find({
+            _id: { $in: allCommunityIds },
+            isDeleted: false
+        }).select('name description bannerImage location status createdAt').lean();
+
+        return res.status(200).send(response.toJson(
+            messages['en'].common.detail_success,
+            { communities: allCommunities }
+        ));
+
+    } catch (err) {
+        const statusCode = err.statusCode || 500;
+        const errMess = err.message || err;
+        return res.status(statusCode).send(response.toJson(errMess));
+    }
+};
 
 /**
  * Get manager dashboard statistics for a specific community
@@ -149,6 +193,7 @@ const approveCommunityJoinRequest = async (req, res) => {
     try {
         const { requestId } = req.params;
         const { communityId } = req.params;
+        const { comment } = req.body; // Optional comment/feedback
 
         // Validate request ID
         if (!mongoose.Types.ObjectId.isValid(requestId)) {
@@ -176,6 +221,9 @@ const approveCommunityJoinRequest = async (req, res) => {
         joinRequest.reviewedBy = req.user._id;
         joinRequest.reviewedAt = new Date();
         joinRequest.updatedAt = new Date();
+        if (comment) {
+            joinRequest.reviewNotes = comment;
+        }
 
         await joinRequest.save();
 
@@ -553,6 +601,7 @@ const approveCommunityPost = async (req, res) => {
     try {
         const { postId } = req.params;
         const { communityId } = req.params;
+        const { comment } = req.body; // Optional feedback
 
         // Validate post ID
         if (!mongoose.Types.ObjectId.isValid(postId)) {
@@ -571,13 +620,14 @@ const approveCommunityPost = async (req, res) => {
         }
 
         // Check if post is already approved
-        if (post.status === 'Approved') {
+        if (post.status === 'approved' || post.status === 'Approved') {
             return res.status(400).send(response.toJson('Post is already approved'));
         }
 
         // Update the post
-        post.status = 'Approved';
+        post.status = 'approved';
         post.updatedAt = new Date();
+        // Note: Pulses model doesn't have reviewNotes field, but we can add it if needed
 
         await post.save();
 
@@ -600,6 +650,7 @@ const rejectCommunityPost = async (req, res) => {
     try {
         const { postId } = req.params;
         const { communityId } = req.params;
+        const { comment } = req.body; // Required feedback for rejection
 
         // Validate post ID
         if (!mongoose.Types.ObjectId.isValid(postId)) {
@@ -618,13 +669,14 @@ const rejectCommunityPost = async (req, res) => {
         }
 
         // Check if post is already rejected
-        if (post.status === 'Rejected') {
+        if (post.status === 'rejected' || post.status === 'Rejected') {
             return res.status(400).send(response.toJson('Post is already rejected'));
         }
 
         // Update the post
-        post.status = 'Rejected';
+        post.status = 'rejected';
         post.updatedAt = new Date();
+        // Note: Pulses model doesn't have reviewNotes field, but we can add it if needed
 
         await post.save();
 
@@ -884,7 +936,308 @@ const getCommunityEventStats = async (req, res) => {
     }
 };
 
+/**
+ * Get marketplace listings for moderation
+ */
+const getMarketplaceListings = async (req, res) => {
+    try {
+        const { communityId } = req.params;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+        const search = req.query.search || '';
+        const statusParam = req.query.status;
+
+        // Build filter
+        let filter = {
+            communityId: communityId,
+            isDeleted: false
+        };
+
+        // Handle status filter
+        if (statusParam) {
+            filter.status = statusParam;
+        }
+
+        // Handle search
+        if (search) {
+            filter.$or = [
+                { title: { $regex: search, $options: 'i' } },
+                { description: { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        const listings = await MarketplaceListingsModel.find(filter)
+            .populate('userId', 'name email')
+            .populate('reviewedBy', 'name')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit)
+            .lean();
+
+        const total = await MarketplaceListingsModel.countDocuments(filter);
+
+        return res.status(200).send(response.toJson(
+            messages['en'].common.detail_success,
+            {
+                listings,
+                pagination: {
+                    total,
+                    page,
+                    limit,
+                    totalPages: Math.ceil(total / limit)
+                }
+            }
+        ));
+
+    } catch (err) {
+        const statusCode = err.statusCode || 500;
+        const errMess = err.message || err;
+        return res.status(statusCode).send(response.toJson(errMess));
+    }
+};
+
+/**
+ * Approve a marketplace listing
+ */
+const approveMarketplaceListing = async (req, res) => {
+    try {
+        const { listingId } = req.params;
+        const { communityId } = req.params;
+        const { comment } = req.body; // Optional comment
+
+        // Validate listing ID
+        if (!mongoose.Types.ObjectId.isValid(listingId)) {
+            return res.status(400).send(response.toJson('Invalid listing ID'));
+        }
+
+        // Find the listing
+        const listing = await MarketplaceListingsModel.findOne({
+            _id: listingId,
+            communityId: communityId,
+            isDeleted: false
+        });
+
+        if (!listing) {
+            return res.status(404).send(response.toJson(messages['en'].common.not_exists));
+        }
+
+        // Check if listing is already approved
+        if (listing.status === 'approved') {
+            return res.status(400).send(response.toJson('Listing is already approved'));
+        }
+
+        // Update the listing
+        listing.status = 'approved';
+        listing.reviewedBy = req.user._id;
+        listing.reviewedAt = new Date();
+        if (comment) {
+            listing.reviewNotes = comment;
+        }
+
+        await listing.save();
+
+        return res.status(200).send(response.toJson(
+            'Listing approved successfully',
+            listing
+        ));
+
+    } catch (err) {
+        const statusCode = err.statusCode || 500;
+        const errMess = err.message || err;
+        return res.status(statusCode).send(response.toJson(errMess));
+    }
+};
+
+/**
+ * Reject a marketplace listing
+ */
+const rejectMarketplaceListing = async (req, res) => {
+    try {
+        const { listingId } = req.params;
+        const { communityId } = req.params;
+        const { comment } = req.body; // Required feedback for rejection
+
+        // Validate listing ID
+        if (!mongoose.Types.ObjectId.isValid(listingId)) {
+            return res.status(400).send(response.toJson('Invalid listing ID'));
+        }
+
+        // Find the listing
+        const listing = await MarketplaceListingsModel.findOne({
+            _id: listingId,
+            communityId: communityId,
+            isDeleted: false
+        });
+
+        if (!listing) {
+            return res.status(404).send(response.toJson(messages['en'].common.not_exists));
+        }
+
+        // Check if listing is already rejected
+        if (listing.status === 'rejected') {
+            return res.status(400).send(response.toJson('Listing is already rejected'));
+        }
+
+        // Update the listing
+        listing.status = 'rejected';
+        listing.reviewedBy = req.user._id;
+        listing.reviewedAt = new Date();
+        listing.reviewNotes = comment || 'Listing rejected by manager';
+
+        await listing.save();
+
+        return res.status(200).send(response.toJson(
+            'Listing rejected successfully',
+            listing
+        ));
+
+    } catch (err) {
+        const statusCode = err.statusCode || 500;
+        const errMess = err.message || err;
+        return res.status(statusCode).send(response.toJson(errMess));
+    }
+};
+
+/**
+ * Get marketplace listing stats
+ */
+const getMarketplaceListingStats = async (req, res) => {
+    try {
+        const { communityId } = req.params;
+
+        const total = await MarketplaceListingsModel.countDocuments({
+            communityId: communityId,
+            isDeleted: false
+        });
+
+        const approved = await MarketplaceListingsModel.countDocuments({
+            communityId: communityId,
+            status: 'approved',
+            isDeleted: false
+        });
+
+        const pending = await MarketplaceListingsModel.countDocuments({
+            communityId: communityId,
+            status: 'pending',
+            isDeleted: false
+        });
+
+        const rejected = await MarketplaceListingsModel.countDocuments({
+            communityId: communityId,
+            status: 'rejected',
+            isDeleted: false
+        });
+
+        const stats = {
+            total,
+            approved,
+            pending,
+            rejected
+        };
+
+        return res.status(200).send(response.toJson(
+            messages['en'].common.detail_success,
+            stats
+        ));
+
+    } catch (err) {
+        const statusCode = err.statusCode || 500;
+        const errMess = err.message || err;
+        return res.status(statusCode).send(response.toJson(errMess));
+    }
+};
+
+/**
+ * Get comprehensive dashboard data with all pending items
+ */
+const getModerationDashboard = async (req, res) => {
+    try {
+        const { communityId } = req.params;
+
+        // Get all pending items
+        const [pendingUsers, pendingPulses, pendingListings] = await Promise.all([
+            // Pending join requests
+            CommunityJoinRequestsModel.find({
+                communityId: communityId,
+                status: 'Pending',
+                isDeleted: false
+            })
+                .populate('userId', 'name email createdAt')
+                .sort({ createdAt: -1 })
+                .limit(10)
+                .lean(),
+
+            // Pending pulses
+            PulsesModel.find({
+                communityId: communityId,
+                status: 'pending',
+                isDeleted: false
+            })
+                .populate('userId', 'name email')
+                .sort({ createdAt: -1 })
+                .limit(10)
+                .lean(),
+
+            // Pending marketplace listings
+            MarketplaceListingsModel.find({
+                communityId: communityId,
+                status: 'pending',
+                isDeleted: false
+            })
+                .populate('userId', 'name email')
+                .sort({ createdAt: -1 })
+                .limit(10)
+                .lean()
+        ]);
+
+        // Get counts
+        const [usersCount, pulsesCount, listingsCount] = await Promise.all([
+            CommunityJoinRequestsModel.countDocuments({
+                communityId: communityId,
+                status: 'Pending',
+                isDeleted: false
+            }),
+            PulsesModel.countDocuments({
+                communityId: communityId,
+                status: 'pending',
+                isDeleted: false
+            }),
+            MarketplaceListingsModel.countDocuments({
+                communityId: communityId,
+                status: 'pending',
+                isDeleted: false
+            })
+        ]);
+
+        const dashboardData = {
+            stats: {
+                pendingUsers: usersCount,
+                pendingPulses: pulsesCount,
+                pendingListings: listingsCount,
+                totalPending: usersCount + pulsesCount + listingsCount
+            },
+            pendingItems: {
+                users: pendingUsers,
+                pulses: pendingPulses,
+                listings: pendingListings
+            }
+        };
+
+        return res.status(200).send(response.toJson(
+            messages['en'].common.detail_success,
+            dashboardData
+        ));
+
+    } catch (err) {
+        const statusCode = err.statusCode || 500;
+        const errMess = err.message || err;
+        return res.status(statusCode).send(response.toJson(errMess));
+    }
+};
+
 module.exports = {
+    getManagerCommunities,
     getDashboardStats,
     getCommunityJoinRequests,
     approveCommunityJoinRequest,
@@ -900,7 +1253,306 @@ module.exports = {
     getCommunityPostStats,
     getCommunityJoinRequestStats,
     getCommunityMemberStats,
-    getCommunityEventStats
+    getCommunityEventStats,
+    getMarketplaceListings,
+    approveMarketplaceListing,
+    rejectMarketplaceListing,
+    getMarketplaceListingStats,
+    getModerationDashboard,
+    getPulseApprovals,
+    approvePulse,
+    rejectPulse,
+    getAllUsers,
+    addUserToCommunity
+};
+
+/**
+ * Get pulse approvals for manager's community
+ */
+const getPulseApprovals = async (req, res) => {
+    try {
+        const { communityId } = req.params;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+        const search = req.query.search || '';
+        const status = req.query.status || 'pending';
+
+        // Verify manager has access to this community
+        const community = await CommunitiesModel.findOne({
+            _id: communityId,
+            isDeleted: false
+        });
+
+        if (!community) {
+            return res.status(404).send(response.toJson('Community not found'));
+        }
+
+        // Build filter
+        const filter = {
+            communityId: communityId,
+            isDeleted: false
+        };
+
+        // Add status filter
+        if (status) {
+            filter.status = status;
+        }
+
+        // Add search filter
+        if (search) {
+            filter.$or = [
+                { title: { $regex: search, $options: 'i' } },
+                { description: { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        const pulses = await PulsesModel.find(filter)
+            .populate('userId', 'name email')
+            .populate('communityId', 'name')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit)
+            .lean();
+
+        const total = await PulsesModel.countDocuments(filter);
+
+        return res.status(200).send(response.toJson(
+            messages['en'].common.detail_success,
+            {
+                pulses,
+                pagination: {
+                    total,
+                    page,
+                    limit,
+                    totalPages: Math.ceil(total / limit)
+                }
+            }
+        ));
+    } catch (err) {
+        const statusCode = err.statusCode || 500;
+        const errMess = err.message || err;
+        return res.status(statusCode).send(response.toJson(errMess));
+    }
+};
+
+/**
+ * Approve a pulse (Manager)
+ */
+const approvePulse = async (req, res) => {
+    try {
+        const { communityId, pulseId } = req.params;
+
+        // Verify manager has access to this community
+        const community = await CommunitiesModel.findOne({
+            _id: communityId,
+            isDeleted: false
+        });
+
+        if (!community) {
+            return res.status(404).send(response.toJson('Community not found'));
+        }
+
+        const pulse = await PulsesModel.findOne({
+            _id: pulseId,
+            communityId: communityId,
+            isDeleted: false
+        });
+
+        if (!pulse) {
+            return res.status(404).send(response.toJson('Pulse not found'));
+        }
+
+        pulse.status = 'approved';
+        pulse.reviewedBy = req.user._id;
+        pulse.reviewedAt = new Date();
+        await pulse.save();
+
+        return res.status(200).send(response.toJson(
+            'Pulse approved successfully',
+            pulse
+        ));
+    } catch (err) {
+        const statusCode = err.statusCode || 500;
+        const errMess = err.message || err;
+        return res.status(statusCode).send(response.toJson(errMess));
+    }
+};
+
+/**
+ * Reject a pulse (Manager)
+ */
+const rejectPulse = async (req, res) => {
+    try {
+        const { communityId, pulseId } = req.params;
+        const { rejectionReason } = req.body;
+
+        // Verify manager has access to this community
+        const community = await CommunitiesModel.findOne({
+            _id: communityId,
+            isDeleted: false
+        });
+
+        if (!community) {
+            return res.status(404).send(response.toJson('Community not found'));
+        }
+
+        const pulse = await PulsesModel.findOne({
+            _id: pulseId,
+            communityId: communityId,
+            isDeleted: false
+        });
+
+        if (!pulse) {
+            return res.status(404).send(response.toJson('Pulse not found'));
+        }
+
+        pulse.status = 'rejected';
+        pulse.reviewedBy = req.user._id;
+        pulse.reviewedAt = new Date();
+        if (rejectionReason) {
+            pulse.reviewNotes = rejectionReason.trim();
+        }
+        await pulse.save();
+
+        return res.status(200).send(response.toJson(
+            'Pulse rejected successfully',
+            pulse
+        ));
+    } catch (err) {
+        const statusCode = err.statusCode || 500;
+        const errMess = err.message || err;
+        return res.status(statusCode).send(response.toJson(errMess));
+    }
+};
+
+/**
+ * Get all users in manager's community
+ */
+const getAllUsers = async (req, res) => {
+    try {
+        const { communityId } = req.params;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+        const search = req.query.search || '';
+        const statusParam = req.query.status;
+
+        // Verify manager has access to this community
+        const community = await CommunitiesModel.findOne({
+            _id: communityId,
+            isDeleted: false
+        });
+
+        if (!community) {
+            return res.status(404).send(response.toJson('Community not found'));
+        }
+
+        // Build user filter
+        const userFilter = {
+            communityId: communityId,
+            isDeleted: false
+        };
+
+        // Handle status filter
+        if (statusParam) {
+            userFilter.status = statusParam;
+        }
+
+        // Handle search filter
+        if (search) {
+            userFilter.$or = [
+                { name: { $regex: search, $options: 'i' } },
+                { email: { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        const users = await UsersModel.find(userFilter)
+            .skip(skip)
+            .limit(limit)
+            .sort({ createdAt: -1 })
+            .lean();
+
+        const total = await UsersModel.countDocuments(userFilter);
+
+        return res.status(200).send(response.toJson(
+            messages['en'].common.detail_success,
+            {
+                users,
+                pagination: {
+                    total,
+                    page,
+                    limit,
+                    totalPages: Math.ceil(total / limit)
+                }
+            }
+        ));
+    } catch (err) {
+        const statusCode = err.statusCode || 500;
+        const errMess = err.message || err;
+        return res.status(statusCode).send(response.toJson(errMess));
+    }
+};
+
+/**
+ * Add user to community (Manager)
+ */
+const addUserToCommunity = async (req, res) => {
+    try {
+        const { communityId } = req.params;
+        const { email, name, role = 'User' } = req.body;
+
+        if (!email || !name) {
+            return res.status(400).send(response.toJson('Email and name are required'));
+        }
+
+        // Verify manager has access to this community
+        const community = await CommunitiesModel.findOne({
+            _id: communityId,
+            isDeleted: false
+        });
+
+        if (!community) {
+            return res.status(404).send(response.toJson('Community not found'));
+        }
+
+        // Check if user already exists
+        let user = await UsersModel.findOne({
+            email: email.toLowerCase(),
+            isDeleted: false
+        });
+
+        if (user) {
+            // User exists, check if already in this community
+            if (user.communityId && user.communityId.toString() === communityId) {
+                return res.status(400).send(response.toJson('User is already a member of this community'));
+            }
+            // Update user's community
+            user.communityId = communityId;
+            user.status = 'Active';
+            await user.save();
+        } else {
+            // Create new user
+            user = new UsersModel({
+                name,
+                email: email.toLowerCase(),
+                role,
+                communityId,
+                status: 'Active'
+            });
+            await user.save();
+        }
+
+        return res.status(200).send(response.toJson(
+            'User added to community successfully',
+            user
+        ));
+    } catch (err) {
+        const statusCode = err.statusCode || 500;
+        const errMess = err.message || err;
+        console.error('Error adding user to community:', errMess);
+        return res.status(statusCode).send(response.toJson(errMess));
+    }
 };
 
 

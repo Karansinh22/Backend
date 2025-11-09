@@ -552,7 +552,92 @@ const getCommunityMarketplaceListings = async (req, res) => {
     }
 };
 
-// Get Community Members (simplified version)
+// Leave Community (Requires Authentication)
+const leaveCommunity = async (req, res) => {
+  try {
+    // Get userId from req.user - auth middleware sets req.user._id
+    if (!req.user || !req.user._id) {
+      return res.status(401).send(response.toJson('User not authenticated'));
+    }
+    
+    const { communityId } = req.params;
+    
+    if (!mongoose.Types.ObjectId.isValid(communityId)) {
+      return res.status(400).send(response.toJson('Invalid community ID'));
+    }
+
+    // Ensure userId is a valid ObjectId
+    let userId = req.user._id;
+    if (typeof userId === 'string' && mongoose.Types.ObjectId.isValid(userId)) {
+      userId = new mongoose.Types.ObjectId(userId);
+    }
+
+    // Check if community exists
+    const community = await CommunitiesModel.findOne({
+      _id: communityId,
+      isDeleted: false
+    }).select('members managerId createdBy');
+
+    if (!community) {
+      return res.status(404).send(response.toJson('Community not found'));
+    }
+
+    // Check if user is the creator (cannot leave their own community)
+    if (community.createdBy && community.createdBy.toString() === userId.toString()) {
+      return res.status(400).send(response.toJson('Community creator cannot leave their own community'));
+    }
+
+    // Check if user is the manager (cannot leave as manager)
+    if (community.managerId && community.managerId.toString() === userId.toString()) {
+      return res.status(400).send(response.toJson('Community manager cannot leave the community. Please assign a new manager first.'));
+    }
+
+    // Check if user is a member
+    const isMember = community.members.some(
+      memberId => memberId.toString() === userId.toString()
+    );
+
+    if (!isMember) {
+      return res.status(400).send(response.toJson('User is not a member of this community'));
+    }
+
+    // Remove user from members array
+    community.members = community.members.filter(
+      memberId => memberId.toString() !== userId.toString()
+    );
+
+    // Save updated community
+    await community.save();
+
+    // Also delete any approved join requests for this user and community
+    await CommunityJoinRequestsModel.updateMany(
+      {
+        userId,
+        communityId,
+        status: 'Approved',
+        isDeleted: false
+      },
+      {
+        $set: {
+          isDeleted: true,
+          deletedAt: new Date()
+        }
+      }
+    );
+
+    return res.status(200).send(response.toJson(
+      'Successfully left the community'
+    ));
+
+  } catch (err) {
+    console.error('Error leaving community:', err);
+    const statusCode = err.statusCode || 500;
+    const errMess = err.message || err;
+    return res.status(statusCode).send(response.toJson(errMess));
+  }
+};
+
+// Get Community Members (enhanced version)
 const getCommunityMembers = async (req, res) => {
     try {
         const { communityId } = req.params;
@@ -561,34 +646,38 @@ const getCommunityMembers = async (req, res) => {
         const community = await CommunitiesModel.findOne({
             _id: communityId,
             isDeleted: false
-        }).populate('managerId', 'name email');
+        }).populate('managerId', 'name email createdAt');
 
         if (!community) {
             return res.status(404).send(response.toJson(messages['en'].common.not_exists));
         }
 
-        // For now, return a simplified members list
-        // In a real implementation, you might want to fetch actual user details
-        const members = [
-            {
+        // Start with manager information
+        const members = [];
+
+        // Add manager if exists
+        if (community.managerId) {
+            members.push({
                 _id: community.managerId._id,
                 name: community.managerId.name,
                 email: community.managerId.email,
                 role: 'Manager',
-                isManager: true
-            }
-        ];
+                isManager: true,
+                createdAt: community.managerId.createdAt
+            });
+        }
 
         // Add other members if available
         if (community.members && community.members.length > 0) {
-            // This would normally fetch actual user details from the users collection
-            // For now, we'll just return a simplified structure
+            // For now, we'll create placeholder members
+            // In a real implementation, you would fetch actual user details from the users collection
             community.members.forEach((memberId, index) => {
                 members.push({
                     _id: memberId,
                     name: `Member ${index + 1}`,
                     role: 'Resident',
-                    isManager: false
+                    isManager: false,
+                    createdAt: new Date() // Placeholder date
                 });
             });
         }
@@ -674,8 +763,15 @@ module.exports = {
     getCommunityPulses,
     getCommunityMarketplaceListings,
     getCommunityMembers,
-    getCommunityEvents
+    getCommunityEvents,
+    leaveCommunity  // Add the new function
 };
+
+
+
+
+
+
 
 
 

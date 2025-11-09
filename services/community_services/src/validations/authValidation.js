@@ -31,7 +31,7 @@ const registerValidation = [
     
     body('role')
         .optional()
-        .isIn(['User', 'Admin', 'SuperAdmin']).withMessage('Invalid role specified')
+        .isIn(['User', 'Manager']).withMessage('Invalid role specified. Admin and SuperAdmin roles cannot be assigned during registration.')
 ];
 
 // Login Validation (supports both email and mobile number)

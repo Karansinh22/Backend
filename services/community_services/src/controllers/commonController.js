@@ -2,12 +2,8 @@ const messages = require("../message");
 const response = require("../config/response.js");
 // const CmsModel = require('../models/models/cms.js');
 const { validationResult } = require('express-validator');
-const AWS = require('aws-sdk');
-const s3 = new AWS.S3({
-	accessKeyId: process.env.AWS_ACCESS_KEY,
-	secretAccessKey: process.env.AWS_SECRET_KEY,
-	region: process.env.AWS_DEFAULT_REGION,
-});
+const path = require('path');
+const fs = require('fs');
 const CommonConfig = require('../config/common.js');
 const CommonFun = require('../libs/common.js');
 const axios = require('axios');
@@ -125,6 +121,7 @@ async function commonLargeFileUpload(reqFiles, fileType, root) {
 		const files = Array.isArray(reqFiles) ? reqFiles : [reqFiles];
 
 		let uploadedFiles = [];
+		const { uploadMultipleToCloudinary } = require('../libs/cloudinary');
 
 		for (const file of files) {
 			if (!allowedMimetypes.includes(file.mimetype)) {
@@ -141,24 +138,27 @@ async function commonLargeFileUpload(reqFiles, fileType, root) {
 					message: `${file.name} has an invalid file size`,
 				};
 			}
+		}
 
-			// const root = 'users';
-			const fileName = `${Date.now()}_${file.name}`;
-			const fileKey = `${root}/${fileType}/${fileName}`;
+		// Upload all files to Cloudinary
+		try {
+			console.log('☁️  Uploading large files to Cloudinary via commonLargeFileUpload...');
+			const cloudinaryFolder = `${root}/${fileType}`;
+			const uploadResults = await uploadMultipleToCloudinary(files, cloudinaryFolder, 'image');
+			
+			uploadedFiles = uploadResults.map(result => ({
+				fileName: result.original_filename || result.public_id.split('/').pop(),
+				filePath: result.secure_url,
+			}));
 
-			const params = {
-				Bucket: process.env.AWS_BUCKET,
-				Key: fileKey,
-				Body: file.data,
-				ContentType: file.mimetype,
+			console.log('✅ Large files uploaded to Cloudinary successfully!');
+			console.log('   Number of files:', uploadedFiles.length);
+		} catch (uploadError) {
+			console.error('❌ Error uploading to Cloudinary:', uploadError);
+			return {
+				isSuccess: false,
+				message: 'Failed to upload files: ' + uploadError.message,
 			};
-
-			await s3.upload(params).promise();
-
-			uploadedFiles.push({
-				fileName: fileName,
-				filePath: `${process.env.AWS_FILE_PATH}${fileKey}`,
-			});
 		}
 
 		console.log('uploadedFiles.........', uploadedFiles);
@@ -169,7 +169,7 @@ async function commonLargeFileUpload(reqFiles, fileType, root) {
 		};
 
 	} catch (error) {
-		console.error('commonFileUpload Error:', error);
+		console.error('commonLargeFileUpload Error:', error);
 		return {
 			isSuccess: false,
 			message: error.message || "File upload failed",
@@ -370,6 +370,7 @@ async function commonFileUpload(reqFiles, fileType, root) {
 		const files = Array.isArray(reqFiles) ? reqFiles : [reqFiles];
 
 		let uploadedFiles = [];
+		const { uploadMultipleToCloudinary } = require('../libs/cloudinary');
 
 		for (const file of files) {
 			if (!allowedMimetypes.includes(file.mimetype)) {
@@ -386,24 +387,27 @@ async function commonFileUpload(reqFiles, fileType, root) {
 					message: `${file.name} has an invalid file size`,
 				};
 			}
+		}
 
-			// const root = 'users';
-			const fileName = `${Date.now()}_${file.name}`;
-			const fileKey = `${root}/${fileType}/${fileName}`;
+		// Upload all files to Cloudinary
+		try {
+			console.log('☁️  Uploading files to Cloudinary via commonFileUpload...');
+			const cloudinaryFolder = `${root}/${fileType}`;
+			const uploadResults = await uploadMultipleToCloudinary(files, cloudinaryFolder, 'image');
+			
+			uploadedFiles = uploadResults.map(result => ({
+				fileName: result.original_filename || result.public_id.split('/').pop(),
+				filePath: result.secure_url,
+			}));
 
-			const params = {
-				Bucket: process.env.AWS_BUCKET,
-				Key: fileKey,
-				Body: file.data,
-				ContentType: file.mimetype,
+			console.log('✅ Files uploaded to Cloudinary successfully!');
+			console.log('   Number of files:', uploadedFiles.length);
+		} catch (uploadError) {
+			console.error('❌ Error uploading to Cloudinary:', uploadError);
+			return {
+				isSuccess: false,
+				message: 'Failed to upload files: ' + uploadError.message,
 			};
-
-			await s3.upload(params).promise();
-
-			uploadedFiles.push({
-				fileName: fileName,
-				filePath: `${process.env.AWS_FILE_PATH}${fileKey}`,
-			});
 		}
 
 		console.log('uploadedFiles.........', uploadedFiles);
@@ -423,19 +427,9 @@ async function commonFileUpload(reqFiles, fileType, root) {
 }
 
 async function checkFileExists(root, type, fileName) {
-	// const bucket = "your-bucket-name"; // e.g. "my-bucket"
-	// const key = "users/contacts/1751879102895_contacts (1).json";
-	const key = `${root}/${type}/${fileName}`;
-	// const key = 'users/contacts/1751879102895_contacts (1).json';
 	try {
-		const params = {
-			Bucket: process.env.AWS_BUCKET,
-			Key: key,
-		};
-		// await s3.send(new HeadObjectCommand({ Bucket: process.env.AWS_BUCKET, Key: key }));
-		await s3.headObject(params).promise();
-		return true;
-		// console.log("✅ File exists.");
+		const filePath = path.join(__dirname, '../uploads', root, type, fileName);
+		return fs.existsSync(filePath);
 	} catch (err) {
 		return false;
 	}
@@ -444,10 +438,12 @@ async function checkFileExists(root, type, fileName) {
 const getAccessTokenValidate = async (req, res) => {
 	try {
 		const token = req.body.token;
-		const blockList = await TokenBlackListsModel.findOne({ token: token });
-		if (blockList) {
-			return res.status(404).send(response.toJson(messages['en'].common.not_exists));
-		}
+		// TokenBlackListsModel is not currently used in this codebase
+		// const TokenBlackListsModel = require('../models/tokenBlackLists.js');
+		// const blockList = await TokenBlackListsModel.findOne({ token: token });
+		// if (blockList) {
+		// 	return res.status(404).send(response.toJson(messages['en'].common.not_exists));
+		// }
 
 		return res.status(200).send(response.toJson(messages['en'].common.detail_success));
 	} catch (err) {

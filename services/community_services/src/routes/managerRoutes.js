@@ -4,6 +4,13 @@ const managerController = require('../controllers/managerController');
 const auth = require('../middleware/authMiddleware.js');
 const managerMiddleware = require('../middleware/managerMiddleware.js');
 
+// Get communities where user is a manager
+router.get('/communities', 
+    auth.verifyToken, 
+    managerMiddleware.verifyManager, 
+    managerController.getManagerCommunities
+);
+
 // Manager dashboard stats
 router.get('/dashboard/stats/:communityId', 
     auth.verifyToken, 
@@ -108,6 +115,70 @@ router.get('/reports/:communityId',
     auth.verifyToken, 
     managerMiddleware.verifyCommunityManager, 
     managerController.getCommunityReports
+);
+
+// Marketplace listings
+router.get('/marketplace/listings/:communityId', 
+    auth.verifyToken, 
+    managerMiddleware.verifyCommunityManager, 
+    managerController.getMarketplaceListings
+);
+
+router.put('/marketplace/listings/:communityId/:listingId/approve', 
+    auth.verifyToken, 
+    managerMiddleware.verifyCommunityManager, 
+    managerController.approveMarketplaceListing
+);
+
+router.put('/marketplace/listings/:communityId/:listingId/reject', 
+    auth.verifyToken, 
+    managerMiddleware.verifyCommunityManager, 
+    managerController.rejectMarketplaceListing
+);
+
+router.get('/marketplace/listings/:communityId/stats', 
+    auth.verifyToken, 
+    managerMiddleware.verifyCommunityManager, 
+    managerController.getMarketplaceListingStats
+);
+
+// Comprehensive moderation dashboard
+router.get('/moderation-dashboard/:communityId', 
+    auth.verifyToken, 
+    managerMiddleware.verifyCommunityManager, 
+    managerController.getModerationDashboard
+);
+
+// Pulse approvals (Manager)
+router.get('/pulses/:communityId', 
+    auth.verifyToken, 
+    managerMiddleware.verifyCommunityManager, 
+    managerController.getPulseApprovals
+);
+
+router.put('/pulses/:communityId/:pulseId/approve', 
+    auth.verifyToken, 
+    managerMiddleware.verifyCommunityManager, 
+    managerController.approvePulse
+);
+
+router.put('/pulses/:communityId/:pulseId/reject', 
+    auth.verifyToken, 
+    managerMiddleware.verifyCommunityManager, 
+    managerController.rejectPulse
+);
+
+// User management (Manager)
+router.get('/users/:communityId', 
+    auth.verifyToken, 
+    managerMiddleware.verifyCommunityManager, 
+    managerController.getAllUsers
+);
+
+router.post('/users/:communityId/add', 
+    auth.verifyToken, 
+    managerMiddleware.verifyCommunityManager, 
+    managerController.addUserToCommunity
 );
 
 module.exports = router;

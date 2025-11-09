@@ -77,7 +77,9 @@ app.use(fileUpload({
     limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
     abortOnLimit: true,
     responseOnLimit: 'File size limit has been reached',
-    createParentPath: true // Automatically create parent directories for uploaded files
+    createParentPath: true, // Automatically create parent directories for uploaded files
+    useTempFiles: false, // Store files in memory (req.files) instead of temp files
+    tempFileDir: '/tmp/' // Not used when useTempFiles is false, but good to have
 }));
 
 // Body parser for JSON and urlencoded - only processes non-multipart requests
@@ -87,14 +89,19 @@ app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
 
 app.use(throttleCalls); // Log all API calls
 
-// Add logging middleware
+// Add logging middleware (after fileUpload to see processed files)
 app.use((req, res, next) => {
-  console.log(`=== Incoming Request ===`);
-  console.log(`Method: ${req.method}`);
-  console.log(`URL: ${req.url}`);
-  console.log(`Headers:`, req.headers);
-  console.log(`Query:`, req.query);
-  console.log(`========================`);
+  // Only log file upload requests
+  if (req.method === 'POST' && req.headers['content-type']?.includes('multipart/form-data')) {
+    console.log(`=== File Upload Request ===`);
+    console.log(`Method: ${req.method}`);
+    console.log(`URL: ${req.url}`);
+    console.log(`Has files:`, !!req.files);
+    if (req.files) {
+      console.log(`Files:`, Object.keys(req.files));
+    }
+    console.log(`==========================`);
+  }
   next();
 });
 
@@ -103,6 +110,37 @@ app.set('views', path.join(__dirname, 'app/views'));
 app.set('view engine', 'ejs');
 app.set('trust proxy', true);
 app.use(logApiCalls); // Log all API calls
+
+// Add file upload logging middleware (after fileUpload middleware processes files)
+app.use((req, res, next) => {
+  // Log file upload requests
+  if (req.method === 'POST') {
+    const contentType = req.headers['content-type'] || '';
+    if (contentType.includes('multipart/form-data') || req.files) {
+      console.log(`📤 File Upload Request: ${req.method} ${req.url}`);
+      console.log(`   Content-Type:`, contentType);
+      console.log(`   Has req.files:`, !!req.files);
+      if (req.files) {
+        console.log(`   Files received:`, Object.keys(req.files));
+        for (const [key, file] of Object.entries(req.files)) {
+          const fileObj = Array.isArray(file) ? file[0] : file;
+          if (fileObj) {
+            console.log(`   - ${key}:`, {
+              name: fileObj.name,
+              size: fileObj.size,
+              mimetype: fileObj.mimetype,
+              hasData: !!fileObj.data,
+              hasMv: typeof fileObj.mv === 'function'
+            });
+          }
+        }
+      } else {
+        console.log(`   ⚠️  No files in req.files despite multipart request`);
+      }
+    }
+  }
+  next();
+});
 
 // CRONs
 const webRegistrationReportCron = job(cron,'30 10 * * *', "webRegistrationReportCron");
@@ -119,7 +157,24 @@ app.get("/", (req, res) => {
     res.json({ message: `Welcome to FIRST application. Hello : ${envFile}` });
 });
 
-app.use(express.static(__dirname + '/../uploads/'));
+// Ensure uploads directory exists
+const uploadsDir = path.join(__dirname, '../uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+    console.log('✅ Created uploads directory:', uploadsDir);
+} else {
+    console.log('✅ Uploads directory exists:', uploadsDir);
+}
+
+// Serve static files from uploads directory (including subdirectories)
+app.use('/uploads', express.static(uploadsDir, {
+    etag: true,
+    lastModified: true,
+    maxAge: '1d'
+}));
+
+console.log('✅ Static file serving configured for:', uploadsDir);
+console.log('   Access files at: http://localhost:' + (process.env.PORT || 11001) + '/uploads/');
 
 const PORT = process.env.PORT || 11001;
 

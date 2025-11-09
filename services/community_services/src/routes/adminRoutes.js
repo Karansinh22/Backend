@@ -4,6 +4,7 @@ const adminController = require('../controllers/adminController');
 const { body } = require('express-validator');
 const auth = require('../middleware/authMiddleware.js');
 const multer = require('multer');
+const response = require('../config/response.js');
 
 // Using the global fileUpload middleware instead of multer to maintain consistency
 // File upload is handled via req.files.bannerImage
@@ -34,6 +35,38 @@ router.delete('/communities/:id', auth.verifyToken, auth.verifyAdmin, adminContr
 
 // Community users
 router.get('/communities/:communityId/users', auth.verifyToken, auth.verifyAdmin, adminController.getCommunityUsers);
+
+// Directly update user role (bypass request system) - MUST come before /users route
+router.put('/users/:userId/role', 
+    auth.verifyToken, 
+    auth.verifyAdmin,
+    (req, res, next) => {
+        console.log('✅ Route matched: PUT /users/:userId/role', {
+            userId: req.params.userId,
+            body: req.body,
+            method: req.method,
+            originalUrl: req.originalUrl,
+            path: req.path
+        });
+        next();
+    },
+    (req, res, next) => {
+        // Manual validation instead of express-validator to avoid issues
+        const { role } = req.body;
+        const validRoles = ['User', 'Manager', 'Admin', 'SuperAdmin', 'Resident'];
+        
+        if (!role) {
+            return res.status(400).send(response.toJson('Role is required'));
+        }
+        
+        if (!validRoles.includes(role)) {
+            return res.status(400).send(response.toJson('Invalid role. Must be one of: ' + validRoles.join(', ')));
+        }
+        
+        next();
+    },
+    adminController.updateUserRole
+);
 
 // All users in admin's communities
 router.get('/users', auth.verifyToken, auth.verifyAdmin, adminController.getAllUsers);
@@ -93,5 +126,34 @@ router.put('/pulses/:pulseId/reject',
     ],
     adminController.rejectPulse
 );
+
+// Community manager management
+router.post('/communities/:communityId/managers', 
+    auth.verifyToken, 
+    auth.verifyAdmin,
+    [
+        body('userId').notEmpty().withMessage('User ID is required')
+    ],
+    adminController.assignCommunityManager
+);
+router.get('/communities/:communityId/managers', auth.verifyToken, auth.verifyAdmin, adminController.getCommunityManagers);
+router.delete('/communities/:communityId/managers/:managerId', auth.verifyToken, auth.verifyAdmin, adminController.removeCommunityManager);
+
+// Remove user from community
+router.delete('/communities/:communityId/members/:userId', auth.verifyToken, auth.verifyAdmin, adminController.removeUserFromCommunity);
+
+// Debug route to check if routes are being registered
+router.use((req, res, next) => {
+    if (req.method === 'PUT' && req.path.includes('/users/') && req.path.includes('/role')) {
+        console.log('DEBUG: PUT request to users role path detected:', {
+            method: req.method,
+            path: req.path,
+            originalUrl: req.originalUrl,
+            baseUrl: req.baseUrl,
+            url: req.url
+        });
+    }
+    next();
+});
 
 module.exports = router;

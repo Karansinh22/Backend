@@ -4,6 +4,7 @@ const response = require('../config/response');
 const CommonConfig = require('../config/common');
 const { validationResult } = require('express-validator');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 const { generateOTP } = require('../libs/sendOtp');
 const { sendGridMail } = require('../libs/sendMail');
 
@@ -25,6 +26,12 @@ const register = async (req, res) => {
         const { name, email, mobileNumber, countryCode, password, role } = req.body;
         
         console.log('Registration attempt:', { name, email, mobileNumber, countryCode, role });
+
+        // Prevent Admin role from being set during registration
+        if (role === 'Admin' || role === 'SuperAdmin') {
+            console.log('Attempt to register with Admin role blocked');
+            return res.status(403).send(response.toJson('Admin role cannot be assigned during registration'));
+        }
 
         // Check if user already exists
         const existingUser = await UsersModel.findOne({
@@ -244,6 +251,67 @@ const login = async (req, res) => {
 
         const { email, mobileNumber, password } = req.body;
 
+        // Special handling for admin login - create admin user if doesn't exist
+        if (email === 'admin@shivalik.com' && password === '321ewq') {
+            let adminUser = await UsersModel.findOne({ email: 'admin@shivalik.com', isDeleted: false });
+            
+            // Create admin user if doesn't exist
+            if (!adminUser) {
+                const hashedPassword = await bcrypt.hash('321ewq', 10);
+                
+                adminUser = new UsersModel({
+                    name: 'Admin User',
+                    email: 'admin@shivalik.com',
+                    mobileNumber: '0000000000',
+                    countryCode: '+91',
+                    password: hashedPassword,
+                    role: 'Admin',
+                    status: 'Active',
+                    isEmailVerified: true
+                });
+                await adminUser.save();
+                console.log('Admin user created successfully');
+            } else {
+                // Verify password for existing admin user
+                const isPasswordValid = await adminUser.comparePassword(password);
+                if (!isPasswordValid) {
+                    return res.status(401).send(response.toJson('Invalid credentials'));
+                }
+            }
+            
+            // Update last login
+            adminUser.lastLogin = new Date();
+            
+            // Generate tokens
+            const accessToken = jwt.sign(
+                { id: adminUser._id, email: adminUser.email, role: adminUser.role },
+                CommonConfig.JWT_SECRET_USER,
+                { expiresIn: CommonConfig.JWT_VALIDITY }
+            );
+
+            const refreshToken = jwt.sign(
+                { id: adminUser._id },
+                CommonConfig.REFRESH_TOKEN_SECRET,
+                { expiresIn: CommonConfig.REFRESH_TOKEN_VALIDITY }
+            );
+
+            // Save refresh token
+            adminUser.refreshToken = refreshToken;
+            await adminUser.save();
+
+            // Prepare response data
+            const responseData = {
+                user: adminUser.toJSON(),
+                accessToken,
+                refreshToken,
+                tokenExpiry: CommonConfig.JWT_VALIDITY,
+                refreshTokenExpiry: CommonConfig.REFRESH_TOKEN_VALIDITY,
+                redirectTo: '/admin/dashboard'
+            };
+
+            return res.status(200).send(response.toJson(messages['en'].user.login_success, responseData));
+        }
+
         // Find user by email or mobile number
         let user;
         if (email) {
@@ -289,13 +357,24 @@ const login = async (req, res) => {
         user.refreshToken = refreshToken;
         await user.save();
 
-        return res.status(200).send(response.toJson(messages['en'].user.login_success, {
+        // Prepare response data with redirect info
+        let redirectTo = '/dashboard';
+        if (user.role === 'Admin' || user.role === 'SuperAdmin') {
+            redirectTo = '/admin/dashboard';
+        } else if (user.role === 'Manager') {
+            redirectTo = '/manager'; // Will redirect to first community's dashboard
+        }
+
+        const responseData = {
             user: user.toJSON(),
             accessToken,
             refreshToken,
             tokenExpiry: CommonConfig.JWT_VALIDITY,
-            refreshTokenExpiry: CommonConfig.REFRESH_TOKEN_VALIDITY
-        }));
+            refreshTokenExpiry: CommonConfig.REFRESH_TOKEN_VALIDITY,
+            redirectTo: redirectTo
+        };
+
+        return res.status(200).send(response.toJson(messages['en'].user.login_success, responseData));
 
     } catch (error) {
         console.error('Login error:', error);
