@@ -1,6 +1,7 @@
 const messages = require("../message");
 const response = require("../config/response.js");
 const { validationResult } = require('express-validator');
+const mongoose = require('mongoose');
 const CommunitiesModel = require('../models/Communities.js');
 const AmenitiesModel = require('../models/Amenities.js');
 const EventsModel = require('../models/Events.js');
@@ -54,11 +55,16 @@ const getFeaturedCommunities = async (req, res) => {
 // Get All Communities (with pagination and filters)
 const getAllCommunities = async (req, res) => {
     try {
+        console.log('=== getAllCommunities START ===');
+        console.log('Request query params:', req.query);
+        
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 12;
         const skip = (page - 1) * limit;
         const search = req.query.search || '';
         const statusParam = req.query.status;
+
+        console.log('Parsed params - page:', page, 'limit:', limit, 'skip:', skip, 'search:', search, 'statusParam:', statusParam);
 
         const filter = {
             isDeleted: false
@@ -79,7 +85,10 @@ const getAllCommunities = async (req, res) => {
                 { 'location.city': { $regex: search, $options: 'i' } }
             ];
         }
+        
+        console.log('Query filter:', JSON.stringify(filter, null, 2));
 
+        console.log('About to query CommunitiesModel...');
         const communities = await CommunitiesModel.find(filter)
             .populate('amenityIds', 'name icon')
             .populate('managerId', 'name email')
@@ -87,23 +96,35 @@ const getAllCommunities = async (req, res) => {
             .limit(limit)
             .sort({ isFeatured: -1, createdAt: -1 })
             .lean();
+            
+        console.log('Found communities count:', communities.length);
 
+        console.log('About to count total documents...');
         const total = await CommunitiesModel.countDocuments(filter);
+        console.log('Total communities:', total);
 
+        console.log('Sending response...');
+        const responsePayload = {
+            communities,
+            pagination: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit)
+            }
+        };
+        
+        console.log('Response payload prepared');
+        console.log('=== getAllCommunities END ===');
         return res.status(200).send(response.toJson(
             messages['en'].common.detail_success,
-            {
-                communities,
-                pagination: {
-                    total,
-                    page,
-                    limit,
-                    totalPages: Math.ceil(total / limit)
-                }
-            }
+            responsePayload
         ));
 
     } catch (err) {
+        console.error('=== ERROR in getAllCommunities ===');
+        console.error('Error details:', err);
+        console.error('Error stack:', err.stack);
         const statusCode = err.statusCode || 500;
         const errMess = err.message || err;
         return res.status(statusCode).send(response.toJson(errMess));
@@ -232,11 +253,33 @@ const createJoinRequest = async (req, res) => {
 
     try {
         const { communityId, message } = req.body;
-        const userId = req.user.id;
+        
+        // Get userId from req.user - auth middleware sets req.user._id
+        if (!req.user || !req.user._id) {
+            return res.status(401).send(response.toJson('User not authenticated'));
+        }
+        
+        // Ensure userId is a valid ObjectId
+        let userId = req.user._id;
+        if (typeof userId === 'string' && mongoose.Types.ObjectId.isValid(userId)) {
+            userId = new mongoose.Types.ObjectId(userId);
+        } else if (!mongoose.Types.ObjectId.isValid(userId)) {
+            return res.status(400).send(response.toJson('Invalid user ID'));
+        }
+
+        // Ensure communityId is a valid ObjectId
+        let validCommunityId = communityId;
+        if (typeof communityId === 'string' && mongoose.Types.ObjectId.isValid(communityId)) {
+            validCommunityId = new mongoose.Types.ObjectId(communityId);
+        } else if (!mongoose.Types.ObjectId.isValid(communityId)) {
+            return res.status(400).send(response.toJson('Invalid community ID'));
+        }
+
+        console.log('Creating join request for user:', userId, 'community:', validCommunityId);
 
         // Check if community exists
         const community = await CommunitiesModel.findOne({
-            _id: communityId,
+            _id: validCommunityId,
             isDeleted: false
         });
 
@@ -247,7 +290,7 @@ const createJoinRequest = async (req, res) => {
         // Check for existing request
         const existingRequest = await CommunityJoinRequestsModel.findOne({
             userId,
-            communityId,
+            communityId: validCommunityId,
             isDeleted: false
         });
 
@@ -260,12 +303,14 @@ const createJoinRequest = async (req, res) => {
         // Create join request
         const joinRequest = new CommunityJoinRequestsModel({
             userId,
-            communityId,
+            communityId: validCommunityId,
             message: message || '',
             status: 'Pending'
         });
 
         await joinRequest.save();
+
+        console.log('Join request created successfully:', joinRequest._id);
 
         return res.status(201).send(response.toJson(
             'Join request submitted successfully',
@@ -273,6 +318,7 @@ const createJoinRequest = async (req, res) => {
         ));
 
     } catch (err) {
+        console.error('Error creating join request:', err);
         const statusCode = err.statusCode || 500;
         const errMess = err.message || err;
         return res.status(statusCode).send(response.toJson(errMess));
@@ -282,7 +328,18 @@ const createJoinRequest = async (req, res) => {
 // Get User's Join Requests (Requires Authentication)
 const getUserJoinRequests = async (req, res) => {
     try {
-        const userId = req.user.id;
+        // Get userId from req.user - auth middleware sets req.user._id
+        if (!req.user || !req.user._id) {
+            return res.status(401).send(response.toJson('User not authenticated'));
+        }
+        
+        // Ensure userId is a valid ObjectId
+        let userId = req.user._id;
+        if (typeof userId === 'string' && mongoose.Types.ObjectId.isValid(userId)) {
+            userId = new mongoose.Types.ObjectId(userId);
+        } else if (!mongoose.Types.ObjectId.isValid(userId)) {
+            return res.status(400).send(response.toJson('Invalid user ID'));
+        }
 
         const requests = await CommunityJoinRequestsModel.find({
             userId,
@@ -299,6 +356,80 @@ const getUserJoinRequests = async (req, res) => {
         ));
 
     } catch (err) {
+        console.error('Error getting user join requests:', err);
+        const statusCode = err.statusCode || 500;
+        const errMess = err.message || err;
+        return res.status(statusCode).send(response.toJson(errMess));
+    }
+};
+
+// Check if user is a member of a community (Requires Authentication)
+const checkCommunityMembership = async (req, res) => {
+    try {
+        // Get userId from req.user - auth middleware sets req.user._id
+        if (!req.user || !req.user._id) {
+            return res.status(401).send(response.toJson('User not authenticated'));
+        }
+        
+        const { communityId } = req.params;
+        
+        if (!mongoose.Types.ObjectId.isValid(communityId)) {
+            return res.status(400).send(response.toJson('Invalid community ID'));
+        }
+
+        // Ensure userId is a valid ObjectId
+        let userId = req.user._id;
+        if (typeof userId === 'string' && mongoose.Types.ObjectId.isValid(userId)) {
+            userId = new mongoose.Types.ObjectId(userId);
+        }
+
+        // Check if community exists
+        const community = await CommunitiesModel.findOne({
+            _id: communityId,
+            isDeleted: false
+        }).select('members managerId createdBy');
+
+        if (!community) {
+            return res.status(404).send(response.toJson('Community not found'));
+        }
+
+        // Check if user is a member
+        const isMember = community.members.some(
+            memberId => memberId.toString() === userId.toString()
+        );
+
+        // Check if user is manager or creator
+        const isManager = community.managerId && community.managerId.toString() === userId.toString();
+        const isCreator = community.createdBy && community.createdBy.toString() === userId.toString();
+
+        // Check if user has approved join request
+        const joinRequest = await CommunityJoinRequestsModel.findOne({
+            userId,
+            communityId,
+            status: 'Approved',
+            isDeleted: false
+        });
+
+        const hasApprovedRequest = !!joinRequest;
+
+        // User is considered a member if:
+        // 1. They are in the members array, OR
+        // 2. They are the manager/creator, OR
+        // 3. They have an approved join request
+        const isCommunityMember = isMember || isManager || isCreator || hasApprovedRequest;
+
+        return res.status(200).send(response.toJson(
+            messages['en'].common.detail_success,
+            {
+                isMember: isCommunityMember,
+                isManager,
+                isCreator,
+                hasApprovedRequest
+            }
+        ));
+
+    } catch (err) {
+        console.error('Error checking community membership:', err);
         const statusCode = err.statusCode || 500;
         const errMess = err.message || err;
         return res.status(statusCode).send(response.toJson(errMess));
@@ -365,10 +496,10 @@ const getCommunityPulses = async (req, res) => {
 const getCommunityMarketplaceListings = async (req, res) => {
     try {
         const { communityId } = req.params;
-        const limit = parseInt(req.query.limit) || 10;
+        const limit = parseInt(req.query.limit) || 12;
         const page = parseInt(req.query.page) || 1;
         const skip = (page - 1) * limit;
-        const type = req.query.type; // 'want' or 'offer'
+        const type = req.query.type; // 'buy' or 'sell'
 
         // Verify community exists
         const community = await CommunitiesModel.findOne({
@@ -539,8 +670,17 @@ module.exports = {
     getAllAmenities,
     createJoinRequest,
     getUserJoinRequests,
+    checkCommunityMembership,
     getCommunityPulses,
     getCommunityMarketplaceListings,
     getCommunityMembers,
     getCommunityEvents
 };
+
+
+
+
+
+
+
+

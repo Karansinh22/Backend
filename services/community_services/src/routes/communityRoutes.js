@@ -1,6 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const communityController = require('../controllers/communityController');
+const pulsesRoutes = require('./pulsesRoutes');
+const eventsRoutes = require('./eventsRoutes');
+const marketplaceRoutes = require('./marketplaceRoutes');
+const directoryRoutes = require('./directoryRoutes');
 const { body } = require('express-validator');
 const auth = require('../middleware/authMiddleware.js');
 
@@ -12,7 +16,7 @@ router.get('/events/recent', communityController.getRecentEvents);
 router.get('/announcements/recent', communityController.getRecentAnnouncements);
 router.get('/amenities', communityController.getAllAmenities);
 
-// Community-specific public routes
+// Community-specific public routes (legacy - kept for backward compatibility)
 router.get('/communities/:communityId/pulses', communityController.getCommunityPulses);
 router.get('/communities/:communityId/marketplace', communityController.getCommunityMarketplaceListings);
 router.get('/communities/:communityId/members', communityController.getCommunityMembers);
@@ -30,5 +34,12 @@ router.post(
 );
 
 router.get('/join-requests/user', auth.verifyToken, communityController.getUserJoinRequests);
+router.get('/communities/:communityId/membership', auth.verifyToken, communityController.checkCommunityMembership);
+
+// Mount module-specific routes
+router.use('/', pulsesRoutes);
+router.use('/', eventsRoutes);
+router.use('/', marketplaceRoutes);
+router.use('/', directoryRoutes);
 
 module.exports = router;

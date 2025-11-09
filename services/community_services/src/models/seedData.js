@@ -4,6 +4,7 @@ const CommunitiesModel = require('./Communities');
 const PulsesModel = require('./Pulses');
 const MarketplaceListingsModel = require('./MarketplaceListings');
 const EventsModel = require('./Events');
+const DirectoryEntriesModel = require('./DirectoryEntries');
 const UsersModel = require('./Users');
 
 async function insertDummyData() {
@@ -273,6 +274,54 @@ async function insertDummyData() {
                 createdBy: manager._id
             },
             {
+                name: 'Civil Engineers Group Ahmedabad',
+                description: 'A professional community for civil engineers in Ahmedabad. Connect with fellow engineers, share knowledge, discuss projects, and grow your professional network. This community brings together experienced professionals, fresh graduates, and students in the field of civil engineering.',
+                shortDescription: 'Professional network for civil engineers',
+                image: 'https://images.unsplash.com/photo-1581092160562-40aa28e2ea6e?w=800',
+                bannerImage: 'https://images.unsplash.com/photo-1581092160562-40aa28e2ea6e?w=1200',
+                logo: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=400',
+                managerId: manager._id,
+                members: [user1._id, user2._id, user3._id],
+                pendingRequests: [],
+                pulses: [],
+                marketplaceListings: [],
+                events: [],
+                territory: 'Ahmedabad - Professional Network',
+                location: {
+                    address: 'Engineering Hub, Science City Road',
+                    city: 'Ahmedabad',
+                    state: 'Gujarat',
+                    zipCode: '380060',
+                    country: 'India',
+                    coordinates: {
+                        lat: 23.0225,
+                        lng: 72.5714
+                    }
+                },
+                isFeatured: true,
+                highlights: [
+                    'Professional Networking Events',
+                    'Technical Workshops & Seminars',
+                    'Project Collaboration Platform',
+                    'Job Opportunities & Career Growth',
+                    'Knowledge Sharing Sessions',
+                    'Industry Expert Talks',
+                    'Study Groups & Mentorship',
+                    'Latest Industry Updates'
+                ],
+                amenityIds: [],
+                totalUnits: 500,
+                occupiedUnits: 0,
+                establishedYear: 2024,
+                contactInfo: {
+                    email: 'info@civilengineersahmedabad.com',
+                    phone: '+91-9876543250',
+                    website: 'https://civilengineersahmedabad.com'
+                },
+                status: 'active',
+                createdBy: manager._id
+            },
+            {
                 name: 'River Valley Heights',
                 description: 'Upcoming luxury project near riverside. River Valley Heights is under development and promises to be the most sought-after address in the city with river-facing apartments and premium amenities.',
                 shortDescription: 'Riverside luxury - Coming Soon',
@@ -430,6 +479,43 @@ async function insertDummyData() {
                 comments: []
             });
 
+            // Find Civil Engineers Group Ahmedabad community
+            const civilEngineersCommunity = insertedCommunities.find(c => c.name === 'Civil Engineers Group Ahmedabad');
+
+            // Pulses for Civil Engineers Group Ahmedabad
+            if (civilEngineersCommunity) {
+                const pulse5 = await PulsesModel.create({
+                    title: 'Welcome to Civil Engineers Group Ahmedabad!',
+                    description: 'Welcome to our professional community! This is a space for civil engineers to connect, share knowledge, and collaborate on projects. Feel free to post about job opportunities, technical discussions, or upcoming events.',
+                    territory: 'General',
+                    communityId: civilEngineersCommunity._id,
+                    userId: manager._id,
+                    attachment: 'https://images.unsplash.com/photo-1581092160562-40aa28e2ea6e?w=800',
+                    status: 'approved',
+                    likes: [user1._id, user2._id, user3._id],
+                    comments: [
+                        { userId: user1._id, text: 'Excited to be part of this community!', createdAt: new Date() },
+                        { userId: user2._id, text: 'Looking forward to networking with fellow engineers.', createdAt: new Date() }
+                    ]
+                });
+
+                const pulse6 = await PulsesModel.create({
+                    title: 'Upcoming Technical Workshop: Modern Construction Techniques',
+                    description: 'Join us for a technical workshop on modern construction techniques and sustainable building practices. Date: Next Saturday, 10 AM at Engineering Hub. Free for all members!',
+                    territory: 'Events',
+                    communityId: civilEngineersCommunity._id,
+                    userId: manager._id,
+                    status: 'approved',
+                    likes: [user1._id, user3._id],
+                    comments: []
+                });
+
+                await CommunitiesModel.findByIdAndUpdate(
+                    civilEngineersCommunity._id,
+                    { $push: { pulses: { $each: [pulse5._id, pulse6._id] } } }
+                );
+            }
+
             // Add pulses to communities
             await CommunitiesModel.findByIdAndUpdate(
                 insertedCommunities[0]._id,
@@ -441,11 +527,11 @@ async function insertDummyData() {
                 { $push: { pulses: pulse4._id } }
             );
 
-            console.log('✓ Created 4 pulses');
+            console.log('✓ Created pulses');
 
             // Marketplace Listings
             const listing1 = await MarketplaceListingsModel.create({
-                type: 'offer',
+                type: 'sell',
                 title: 'Furniture for Sale - Complete Living Room Set',
                 description: 'Moving out sale - Premium 3-seater sofa set, center table, dining table with 6 chairs in excellent condition. Barely used for 1 year. Original price ₹80,000.',
                 price: 25000,
@@ -456,7 +542,7 @@ async function insertDummyData() {
             });
 
             const listing2 = await MarketplaceListingsModel.create({
-                type: 'want',
+                type: 'buy',
                 title: 'Looking for Carpool to IT Park',
                 description: 'Need carpool partner from Sunrise Valley to IT Park Sahastradhara. Office timings 9 AM to 6 PM. Can share fuel costs.',
                 price: 0,
@@ -466,7 +552,7 @@ async function insertDummyData() {
             });
 
             const listing3 = await MarketplaceListingsModel.create({
-                type: 'offer',
+                type: 'sell',
                 title: 'Kids Bicycle for Sale',
                 description: 'Selling kids bicycle (age 5-8 years) in good condition. Hero brand with training wheels included.',
                 price: 3500,
@@ -477,7 +563,7 @@ async function insertDummyData() {
             });
 
             const listing4 = await MarketplaceListingsModel.create({
-                type: 'want',
+                type: 'buy',
                 title: 'Looking for Tutor for Class 10 Math',
                 description: 'Need experienced tutor for CBSE Class 10 Mathematics. Prefer female tutor. Budget ₹500 per hour.',
                 price: 500,
@@ -487,7 +573,7 @@ async function insertDummyData() {
             });
 
             const listing5 = await MarketplaceListingsModel.create({
-                type: 'offer',
+                type: 'sell',
                 title: 'Washing Machine - Samsung 6.5kg',
                 description: 'Samsung fully automatic washing machine. 3 years old, working perfectly. Selling due to upgrade.',
                 price: 8000,
@@ -513,7 +599,36 @@ async function insertDummyData() {
                 { $push: { marketplaceListings: listing5._id } }
             );
 
-            console.log('✓ Created 5 marketplace listings');
+            // Marketplace listings for Civil Engineers Group Ahmedabad
+            if (civilEngineersCommunity) {
+                const listing6 = await MarketplaceListingsModel.create({
+                    type: 'sell',
+                    title: 'Engineering Books Collection for Sale',
+                    description: 'Selling my complete collection of civil engineering books including RCC Design, Structural Analysis, Surveying, and more. All books in excellent condition. Perfect for students and professionals.',
+                    price: 5000,
+                    attachment: 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=800',
+                    communityId: civilEngineersCommunity._id,
+                    userId: user1._id,
+                    status: 'approved'
+                });
+
+                const listing7 = await MarketplaceListingsModel.create({
+                    type: 'buy',
+                    title: 'Looking for AutoCAD Drafter for Project',
+                    description: 'Need an experienced AutoCAD drafter for a residential building project. Part-time work, flexible hours. Good pay. Contact for details.',
+                    price: 15000,
+                    communityId: civilEngineersCommunity._id,
+                    userId: user2._id,
+                    status: 'approved'
+                });
+
+                await CommunitiesModel.findByIdAndUpdate(
+                    civilEngineersCommunity._id,
+                    { $push: { marketplaceListings: { $each: [listing6._id, listing7._id] } } }
+                );
+            }
+
+            console.log('✓ Created marketplace listings');
 
             // Events
             const event1 = await EventsModel.create({
@@ -659,7 +774,96 @@ async function insertDummyData() {
                 { $push: { events: event5._id } }
             );
 
-            console.log('✓ Created 6 events');
+            // Events for Civil Engineers Group Ahmedabad
+            if (civilEngineersCommunity) {
+                const event7 = await EventsModel.create({
+                    title: 'Technical Workshop: Modern Construction Techniques',
+                    description: 'Join us for an interactive workshop on modern construction techniques, sustainable building practices, and latest industry trends. Expert speakers and networking opportunities.',
+                    communityId: civilEngineersCommunity._id,
+                    eventDate: new Date('2025-02-15'),
+                    startTime: '10:00 AM',
+                    endTime: '4:00 PM',
+                    location: 'Engineering Hub, Science City Road, Ahmedabad',
+                    images: [
+                        'https://images.unsplash.com/photo-1581092160562-40aa28e2ea6e?w=800'
+                    ],
+                    maxParticipants: 100,
+                    participants: [
+                        { userId: user1._id, status: 'confirmed', registeredAt: new Date() },
+                        { userId: user2._id, status: 'confirmed', registeredAt: new Date() }
+                    ],
+                    attendance: [],
+                    eventType: 'Educational',
+                    status: 'Upcoming',
+                    createdBy: manager._id
+                });
+
+                const event8 = await EventsModel.create({
+                    title: 'Networking Meetup: Industry Professionals',
+                    description: 'Monthly networking meetup for civil engineers. Share experiences, discuss projects, and build professional connections. Refreshments provided.',
+                    communityId: civilEngineersCommunity._id,
+                    eventDate: new Date('2025-01-25'),
+                    startTime: '6:00 PM',
+                    endTime: '8:00 PM',
+                    location: 'Community Center, Ahmedabad',
+                    maxParticipants: 50,
+                    participants: [
+                        { userId: user3._id, status: 'confirmed', registeredAt: new Date() }
+                    ],
+                    attendance: [],
+                    eventType: 'Social',
+                    status: 'Upcoming',
+                    createdBy: manager._id
+                });
+
+                await CommunitiesModel.findByIdAndUpdate(
+                    civilEngineersCommunity._id,
+                    { $push: { events: { $each: [event7._id, event8._id] } } }
+                );
+            }
+
+            console.log('✓ Created events');
+
+            // Directory Entries for Civil Engineers Group Ahmedabad
+            if (civilEngineersCommunity) {
+                const directory1 = await DirectoryEntriesModel.create({
+                    name: 'Rajesh Construction Services',
+                    serviceType: 'Construction',
+                    contactNumber: '+91-9876543210',
+                    email: 'rajesh@construction.com',
+                    address: '123 Construction Lane, Ahmedabad',
+                    availabilityHours: 'Mon-Sat: 9 AM - 6 PM',
+                    verified: true,
+                    communityId: civilEngineersCommunity._id,
+                    userId: manager._id
+                });
+
+                const directory2 = await DirectoryEntriesModel.create({
+                    name: 'Ahmedabad Structural Consultants',
+                    serviceType: 'Consulting',
+                    contactNumber: '+91-9876543211',
+                    email: 'info@structuralconsultants.com',
+                    address: '456 Engineering Plaza, Ahmedabad',
+                    availabilityHours: 'Mon-Fri: 10 AM - 7 PM',
+                    verified: true,
+                    communityId: civilEngineersCommunity._id,
+                    userId: manager._id
+                });
+
+                const directory3 = await DirectoryEntriesModel.create({
+                    name: 'Gujarat Material Suppliers',
+                    serviceType: 'Supplies',
+                    contactNumber: '+91-9876543212',
+                    email: 'sales@materialsuppliers.com',
+                    address: '789 Supply Street, Ahmedabad',
+                    availabilityHours: 'Mon-Sat: 8 AM - 8 PM',
+                    verified: true,
+                    communityId: civilEngineersCommunity._id,
+                    userId: manager._id
+                });
+
+                console.log('✓ Created directory entries for Civil Engineers Group Ahmedabad');
+            }
         }
 
         console.log('\n✅ Dummy data insertion completed successfully!');

@@ -81,14 +81,7 @@ const CommunitiesSchema = new Schema({
         type: Schema.Types.ObjectId,
         ref: 'amenities'
     }],
-    totalUnits: {
-        type: Number,
-        default: 0
-    },
-    occupiedUnits: {
-        type: Number,
-        default: 0
-    },
+
     establishedYear: {
         type: Number
     },
@@ -105,7 +98,8 @@ const CommunitiesSchema = new Schema({
     },
     createdBy: {
         type: Schema.Types.ObjectId,
-         ref: 'users'
+        ref: 'users',
+        required: true
     },
     deletedAt: {
         type: Date,

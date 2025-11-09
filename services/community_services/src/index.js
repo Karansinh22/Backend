@@ -69,10 +69,34 @@ var corsOption = function (req, callback) {
 };
 
 app.use(cors(corsOption));
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(fileUpload());
+
+// Configure fileUpload to parse both files and fields, and handle nested objects
+// This must come BEFORE bodyParser to handle multipart/form-data requests
+app.use(fileUpload({
+    parseNested: true,
+    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
+    abortOnLimit: true,
+    responseOnLimit: 'File size limit has been reached',
+    createParentPath: true // Automatically create parent directories for uploaded files
+}));
+
+// Body parser for JSON and urlencoded - only processes non-multipart requests
+// fileUpload already handles multipart/form-data, so bodyParser will skip those
+app.use(bodyParser.json({ limit: '50mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
+
 app.use(throttleCalls); // Log all API calls
+
+// Add logging middleware
+app.use((req, res, next) => {
+  console.log(`=== Incoming Request ===`);
+  console.log(`Method: ${req.method}`);
+  console.log(`URL: ${req.url}`);
+  console.log(`Headers:`, req.headers);
+  console.log(`Query:`, req.query);
+  console.log(`========================`);
+  next();
+});
 
 // view engine setup
 app.set('views', path.join(__dirname, 'app/views'));
@@ -95,7 +119,7 @@ app.get("/", (req, res) => {
     res.json({ message: `Welcome to FIRST application. Hello : ${envFile}` });
 });
 
-app.use(express.static(__dirname + '/uploads/'));
+app.use(express.static(__dirname + '/../uploads/'));
 
 const PORT = process.env.PORT || 11001;
 
